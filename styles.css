@@ -40,11 +40,72 @@ body {
 
 .hud > div,
 .panel,
+.area-banner,
+.win-screen > div,
 #miniMap {
   background: rgba(12, 15, 17, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.16);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(10px);
+}
+
+.area-banner {
+  position: absolute;
+  top: 86px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 180px;
+  border-radius: 8px;
+  padding: 10px 18px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 0;
+  pointer-events: none;
+}
+
+.win-screen {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.34);
+  pointer-events: none;
+}
+
+.win-screen[hidden] {
+  display: none;
+}
+
+.win-screen > div {
+  width: min(440px, 100%);
+  border-radius: 8px;
+  padding: 32px;
+  text-align: center;
+}
+
+.win-screen span {
+  color: #f0c35a;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.win-screen h2 {
+  margin: 8px 0;
+  font-size: 56px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.win-screen p {
+  margin: 0;
+  color: #d8d0c3;
+}
+
+.lose-screen h2 {
+  color: #ff6b6b;
 }
 
 .hud > div {
@@ -126,8 +187,8 @@ body {
   position: absolute;
   right: 18px;
   bottom: 18px;
-  width: 180px;
-  height: 180px;
+  width: 220px;
+  height: 220px;
   border-radius: 8px;
 }
 
@@ -151,7 +212,7 @@ body {
   }
 
   #miniMap {
-    width: 132px;
-    height: 132px;
+    width: 150px;
+    height: 150px;
   }
 }

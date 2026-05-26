@@ -3,33 +3,51 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Open City Prototype</title>
+    <title>Tag City Game</title>
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <main class="game-shell">
-      <canvas id="game" width="1280" height="720" aria-label="オープンワールド風ゲーム"></canvas>
+      <canvas id="game" width="1280" height="720" aria-label="鬼ごっこゲーム"></canvas>
 
       <section class="hud" aria-label="ゲーム情報">
         <div>
-          <span class="eyebrow">Open City</span>
-          <strong>街を自由に探索</strong>
+          <span class="eyebrow">Tag City</span>
+          <strong>敵から逃げてタスクを集める</strong>
         </div>
         <div class="stats">
-          <span id="speed">0 km/h</span>
-          <span id="area">Downtown</span>
-          <span id="cash">$250</span>
+          <span id="speed">0 pts</span>
+          <span id="area">Park</span>
+          <span id="cash">残機 3</span>
         </div>
       </section>
 
+      <div class="area-banner" id="areaBanner" aria-live="polite">Park</div>
+
       <aside class="panel">
-        <h1>自由行動プロトタイプ</h1>
-        <p>WASD / 矢印キーで移動。Shiftでダッシュ。黄色い目的地に入ると報酬が入ります。</p>
+        <h1>鬼ごっこゲーム</h1>
+        <p>WASD / 矢印キーで移動。Shiftでダッシュ。中央の青いエリアから出て、黄色いタスクを全部集めてください。</p>
         <div class="keys" aria-label="操作方法">
           <span>W</span><span>A</span><span>S</span><span>D</span>
           <span>Shift</span>
         </div>
       </aside>
+
+      <section class="win-screen" id="winScreen" aria-live="polite" hidden>
+        <div>
+          <span>Mission Complete</span>
+          <h2>You Win</h2>
+          <p>すべてのタスクを集めました。</p>
+        </div>
+      </section>
+
+      <section class="win-screen lose-screen" id="loseScreen" aria-live="polite" hidden>
+        <div>
+          <span>Game Over</span>
+          <h2>You Lose</h2>
+          <p>残機をすべて使い切りました。</p>
+        </div>
+      </section>
 
       <canvas id="miniMap" width="180" height="180" aria-label="ミニマップ"></canvas>
     </main>
