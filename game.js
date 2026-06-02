@@ -14,6 +14,11 @@ const resetButtons = document.querySelectorAll("[data-reset]");
 const world = { width: 5400, height: 4000 };
 const keys = new Set();
 const maxLives = 5;
+const enemyVisionRange = 520;
+const enemyVisionAngle = Math.PI * 0.62;
+const enemyCloseDetectRange = 115;
+const maxStamina = 100;
+const maxWarpCharges = 2;
 
 const playerStart = { x: 2912, y: 2462 };
 const startSafeZone = { x: playerStart.x - 190, y: playerStart.y - 140, w: 380, h: 280 };
@@ -23,11 +28,22 @@ const player = {
   score: 0,
   lives: maxLives,
   radius: 15,
+  stamina: maxStamina,
   invincible: 0,
   speedBoost: 0,
   invisible: 0,
+  revealMap: 0,
   deathEffect: 0,
   spottedCooldown: 0,
+  spotted: false,
+  hiding: false,
+  activeTask: null,
+  taskProgress: 0,
+  warps: 1,
+  tasksCompleted: 0,
+  catches: 0,
+  itemsUsed: 0,
+  time: 0,
   lastVisibleX: playerStart.x,
   lastVisibleY: playerStart.y,
   won: false,
@@ -106,16 +122,28 @@ const enemyStarts = [
   { x: 5062, y: 2462 },
 ];
 
-const enemies = [
-  { ...enemyStarts[0], speed: 220, radius: 17, color: "#e04f4f", roleAngle: 0, stuckTime: 0, escapeTarget: null },
-  { ...enemyStarts[1], speed: 220, radius: 17, color: "#ff6b4a", roleAngle: Math.PI, stuckTime: 0, escapeTarget: null },
-  { ...enemyStarts[2], speed: 220, radius: 19, color: "#d93b70", roleAngle: Math.PI / 2, stuckTime: 0, escapeTarget: null },
-  { ...enemyStarts[3], speed: 220, radius: 17, color: "#c944e0", roleAngle: -Math.PI / 2, stuckTime: 0, escapeTarget: null },
-  { ...enemyStarts[4], speed: 220, radius: 17, color: "#f05a7a", roleAngle: Math.PI / 4, stuckTime: 0, escapeTarget: null },
-  { ...enemyStarts[5], speed: 220, radius: 18, color: "#ff784f", roleAngle: -Math.PI * 3 / 4, stuckTime: 0, escapeTarget: null },
-  { ...enemyStarts[6], speed: 220, radius: 17, color: "#d84bff", roleAngle: Math.PI * 3 / 4, stuckTime: 0, escapeTarget: null },
-  { ...enemyStarts[7], speed: 220, radius: 18, color: "#d73939", roleAngle: -Math.PI / 4, stuckTime: 0, escapeTarget: null },
+const enemyProfiles = [
+  { name: "Runner", speed: 250, vision: 430, angle: Math.PI * 0.5, color: "#e04f4f" },
+  { name: "Watcher", speed: 190, vision: 650, angle: Math.PI * 0.82, color: "#ff6b4a" },
+  { name: "Tracker", speed: 220, vision: 520, angle: Math.PI * 0.62, color: "#d93b70", memory: 1.35 },
+  { name: "Sentry", speed: 205, vision: 700, angle: Math.PI * 0.48, color: "#c944e0" },
 ];
+
+const enemies = enemyStarts.map((start, index) => {
+  const profile = enemyProfiles[index % enemyProfiles.length];
+  return {
+    ...start,
+    profile,
+    speed: profile.speed,
+    radius: index === 2 ? 19 : index % 3 === 2 ? 18 : 17,
+    color: profile.color,
+    roleAngle: [0, Math.PI, Math.PI / 2, -Math.PI / 2, Math.PI / 4, -Math.PI * 3 / 4, Math.PI * 3 / 4, -Math.PI / 4][index],
+    facing: 0,
+    stuckTime: 0,
+    stunned: 0,
+    escapeTarget: null,
+  };
+});
 
 function resize() {
   const scale = window.devicePixelRatio || 1;
@@ -126,8 +154,10 @@ function resize() {
 
 window.addEventListener("resize", resize);
 window.addEventListener("keydown", (event) => {
-  keys.add(event.key.toLowerCase());
+  const key = event.key.toLowerCase();
+  keys.add(key);
   ensureAudio();
+  if (key === "r") useWarp();
 });
 window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
 resetButtons.forEach((button) => button.addEventListener("click", resetGame));
@@ -159,8 +189,37 @@ function canMoveTo(x, y, radius) {
   return onRoad(x, y, radius) && !circleBlocked(x, y, radius);
 }
 
+function currentAlertLevel() {
+  const completedRatio = player.tasksCompleted / Math.max(1, tasks.length);
+  const zonePressure = currentZone()?.name === "Station" ? 1 : 0;
+  return clamp(Math.floor(completedRatio * 4) + (player.spotted ? 1 : 0) + zonePressure, 0, 5);
+}
+
+function nearbyHideSpot() {
+  return hideSpots.find((spot) => Math.hypot(player.x - spot.x, player.y - spot.y) < spot.radius + 22);
+}
+
+function useWarp() {
+  if (player.warps <= 0 || player.won || player.lost) return;
+  player.warps -= 1;
+  player.itemsUsed += 1;
+  player.x = playerStart.x;
+  player.y = playerStart.y;
+  player.invincible = 1.4;
+  player.spotted = false;
+  stopBgm();
+  startBgm();
+}
+
+function formatTime(seconds) {
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.floor(seconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${rest}`;
+}
+
 function createTasks() {
   const generated = [];
+  let candidateIndex = 0;
   const blockedPoints = [...enemyStarts, playerStart];
   const verticalRoads = roads.filter((road) => road.h > road.w);
   const horizontalRoads = roads.filter((road) => road.w > road.h);
@@ -170,12 +229,17 @@ function createTasks() {
       const task = {
         x: verticalRoad.x + verticalRoad.w / 2,
         y: horizontalRoad.y + horizontalRoad.h / 2,
+        type: candidateIndex % 9 === 4 ? "repair" : candidateIndex % 11 === 6 ? "risk" : "collect",
+        value: candidateIndex % 11 === 6 ? 240 : 100,
+        duration: candidateIndex % 9 === 4 ? 1.35 : 0,
         taken: false,
       };
       const tooCloseToEdge = task.x < 520 || task.y < 520 || task.x > world.width - 520 || task.y > world.height - 520;
       const tooCloseToBlockedPoint = blockedPoints.some((point) => Math.hypot(point.x - task.x, point.y - task.y) < 210);
       if (!tooCloseToEdge && !tooCloseToBlockedPoint && canMoveTo(task.x, task.y, 16)) {
-        generated.push(task);
+        const keepSpecial = task.type !== "collect";
+        if (keepSpecial || candidateIndex % 2 === 0) generated.push(task);
+        candidateIndex += 1;
       }
     }
   }
@@ -189,13 +253,13 @@ const roadGraph = createRoadGraph();
 
 function createPowerUps() {
   const generated = [];
-  const taskPoints = tasks.filter((_, index) => index % 7 === 2);
-  const types = ["speed", "invisible"];
+  const taskPoints = tasks.filter((_, index) => index % 4 === 2);
+  const types = ["speed", "invisible", "warp", "reveal", "life"];
 
-  for (let i = 0; i < taskPoints.length && generated.length < 8; i++) {
+  for (let i = 0; i < taskPoints.length && generated.length < 14; i++) {
     const point = taskPoints[i];
     const tooCloseToStart = Math.hypot(point.x - playerStart.x, point.y - playerStart.y) < 420;
-    const tooCloseToOther = generated.some((item) => Math.hypot(item.x - point.x, item.y - point.y) < 780);
+    const tooCloseToOther = generated.some((item) => Math.hypot(item.x - point.x, item.y - point.y) < 560);
     if (!tooCloseToStart && !tooCloseToOther && canMoveTo(point.x, point.y, 16)) {
       generated.push({
         x: point.x,
@@ -210,9 +274,24 @@ function createPowerUps() {
 }
 
 const powerUps = createPowerUps();
+const hideSpots = tasks
+  .filter((task, index) => index % 10 === 1 && Math.hypot(task.x - playerStart.x, task.y - playerStart.y) > 520)
+  .slice(0, 18)
+  .map((task, index) => ({
+    x: task.x + (index % 2 ? 34 : -34),
+    y: task.y + (index % 3 ? -28 : 28),
+    radius: 36,
+  }))
+  .filter((spot) => canMoveTo(spot.x, spot.y, 15));
 
 function inStartSafeZone(x, y) {
   return x >= startSafeZone.x && x <= startSafeZone.x + startSafeZone.w && y >= startSafeZone.y && y <= startSafeZone.y + startSafeZone.h;
+}
+
+function currentZone() {
+  return zones.find((item) => (
+    player.x >= item.x && player.x < item.x + item.w && player.y >= item.y && player.y < item.y + item.h
+  ));
 }
 
 function clearLineOnRoad(x1, y1, x2, y2, radius) {
@@ -225,6 +304,34 @@ function clearLineOnRoad(x1, y1, x2, y2, radius) {
     if (!canMoveTo(x, y, radius)) return false;
   }
   return true;
+}
+
+function angleDifference(a, b) {
+  return Math.atan2(Math.sin(a - b), Math.cos(a - b));
+}
+
+function hasClearSight(x1, y1, x2, y2) {
+  const distance = Math.hypot(x2 - x1, y2 - y1);
+  const steps = Math.max(2, Math.ceil(distance / 36));
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const x = x1 + (x2 - x1) * t;
+    const y = y1 + (y2 - y1) * t;
+    if (circleBlocked(x, y, 10)) return false;
+  }
+  return true;
+}
+
+function canEnemySeePlayer(enemy, visible, playerDistance) {
+  if (!visible || player.invincible > 0 || player.hiding) return false;
+  if (!hasClearSight(enemy.x, enemy.y, player.x, player.y)) return false;
+  if (playerDistance < enemyCloseDetectRange) return true;
+  const range = enemy.profile?.vision || enemyVisionRange;
+  const angle = enemy.profile?.angle || enemyVisionAngle;
+  if (playerDistance > range) return false;
+
+  const angleToPlayer = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+  return Math.abs(angleDifference(angleToPlayer, enemy.facing || 0)) < angle / 2;
 }
 
 function nearestRoadNode(x, y, radius) {
@@ -361,7 +468,7 @@ function tickBgm() {
 }
 
 function startBgm() {
-  if (!audioContext || bgmTimer || player.won || player.lost) return;
+  if (!audioContext || bgmTimer || alertActive || player.won || player.lost) return;
   tickBgm();
   bgmTimer = window.setInterval(tickBgm, 180);
 }
@@ -462,11 +569,22 @@ function resetGame() {
   player.angle = 0;
   player.score = 0;
   player.lives = maxLives;
+  player.stamina = maxStamina;
   player.invincible = 0;
   player.speedBoost = 0;
   player.invisible = 0;
+  player.revealMap = 0;
   player.deathEffect = 0;
   player.spottedCooldown = 0;
+  player.spotted = false;
+  player.hiding = false;
+  player.activeTask = null;
+  player.taskProgress = 0;
+  player.warps = 1;
+  player.tasksCompleted = 0;
+  player.catches = 0;
+  player.itemsUsed = 0;
+  player.time = 0;
   player.lastVisibleX = playerStart.x;
   player.lastVisibleY = playerStart.y;
   player.won = false;
@@ -482,11 +600,15 @@ function resetGame() {
     enemy.x = enemyStarts[index].x;
     enemy.y = enemyStarts[index].y;
     enemy.stuckTime = 0;
+    enemy.stunned = 0;
+    enemy.facing = 0;
     enemy.escapeTarget = null;
   });
 
   winScreen.hidden = true;
   loseScreen.hidden = true;
+  winScreen.querySelector("p").textContent = "すべてのタスクを集めました。";
+  loseScreen.querySelector("p").textContent = "残機をすべて使い切りました。";
   startBgm();
 }
 
@@ -495,22 +617,42 @@ function resetAfterTag() {
   player.y = playerStart.y;
   player.invincible = 2.2;
   player.invisible = 0;
+  player.hiding = false;
+  player.activeTask = null;
+  player.taskProgress = 0;
+  player.spotted = false;
+  player.catches += 1;
   enemies.forEach((enemy, index) => {
     enemy.x = enemyStarts[index].x;
     enemy.y = enemyStarts[index].y;
     enemy.stuckTime = 0;
+    enemy.stunned = 0;
+    enemy.facing = 0;
     enemy.escapeTarget = null;
   });
 }
 
 function updatePlayer(dt) {
+  const zoneName = currentZone()?.name || "";
   const up = keys.has("w") || keys.has("arrowup");
   const down = keys.has("s") || keys.has("arrowdown");
   const left = keys.has("a") || keys.has("arrowleft");
   const right = keys.has("d") || keys.has("arrowright");
-  const boost = keys.has("shift");
-  const baseSpeed = player.speedBoost > 0 ? 285 : 220;
+  const moving = up || down || left || right;
+  const naturalCover = zoneName === "Park" || zoneName === "Forest";
+  player.hiding = keys.has("e") && (nearbyHideSpot() || naturalCover) && !moving;
+  if (player.hiding) {
+    player.stamina = Math.min(maxStamina, player.stamina + (naturalCover ? 30 : 20) * dt);
+    player.activeTask = null;
+    player.taskProgress = 0;
+    return;
+  }
+
+  const boost = keys.has("shift") && player.stamina > 4 && moving;
+  const terrainSlow = zoneName === "Docks" || zoneName === "Harbor" ? 0.92 : 1;
+  const baseSpeed = (player.speedBoost > 0 ? 285 : 220) * terrainSlow;
   const moveSpeed = boost ? baseSpeed * 1.5 : baseSpeed;
+  player.stamina = clamp(player.stamina + (boost ? -34 : 24) * dt, 0, maxStamina);
 
   let dx = 0;
   let dy = 0;
@@ -531,12 +673,34 @@ function updatePlayer(dt) {
   if (canMoveTo(nextX, player.y, player.radius)) player.x = nextX;
   if (canMoveTo(player.x, nextY, player.radius)) player.y = nextY;
 
+  let touchingTask = null;
   for (const task of tasks) {
     if (!task.taken && Math.hypot(player.x - task.x, player.y - task.y) < 56) {
+      touchingTask = task;
+      if (task.duration > 0) {
+        const requiredDuration = task.duration + (zoneName === "Factory" ? 0.55 : 0);
+        if (player.activeTask !== task) {
+          player.activeTask = task;
+          player.taskProgress = 0;
+        }
+        player.taskProgress += dt;
+        if (player.taskProgress < requiredDuration) break;
+      }
+
       task.taken = true;
-      player.score += 100;
+      player.activeTask = null;
+      player.taskProgress = 0;
+      player.tasksCompleted += 1;
+      const zoneBonus = zoneName === "Market" ? 25 : zoneName === "Station" ? 45 : 0;
+      player.score += task.value + zoneBonus + currentAlertLevel() * (task.type === "risk" ? 35 : 10);
+      if (task.type === "risk") player.spottedCooldown = 0;
       playTaskSound();
+      break;
     }
+  }
+  if (!touchingTask) {
+    player.activeTask = null;
+    player.taskProgress = 0;
   }
 
   for (const powerUp of powerUps) {
@@ -544,8 +708,14 @@ function updatePlayer(dt) {
       powerUp.taken = true;
       if (powerUp.type === "speed") {
         player.speedBoost = 7.5;
-      } else {
+      } else if (powerUp.type === "invisible") {
         player.invisible = 6;
+      } else if (powerUp.type === "warp") {
+        player.warps = Math.min(maxWarpCharges, player.warps + 1);
+      } else if (powerUp.type === "reveal") {
+        player.revealMap = 9;
+      } else if (powerUp.type === "life") {
+        player.lives = Math.min(maxLives, player.lives + 1);
       }
       playTaskSound();
     }
@@ -554,7 +724,8 @@ function updatePlayer(dt) {
 
 function updateEnemies(dt) {
   const safe = inStartSafeZone(player.x, player.y);
-  const visible = !safe && player.invisible <= 0;
+  const visible = !safe && player.invisible <= 0 && !player.hiding;
+  const alertLevel = currentAlertLevel();
   let spotted = false;
 
   if (visible) {
@@ -565,6 +736,11 @@ function updateEnemies(dt) {
   for (let index = 0; index < enemies.length; index++) {
     const enemy = enemies[index];
     const patrolAngle = performance.now() / 900 + index * 2;
+    if (enemy.stunned > 0) {
+      enemy.stunned = Math.max(0, enemy.stunned - dt);
+      continue;
+    }
+
     let targetX = player.x;
     let targetY = player.y;
 
@@ -572,8 +748,9 @@ function updateEnemies(dt) {
       targetX = enemy.x + Math.cos(patrolAngle) * 140;
       targetY = enemy.y + Math.sin(patrolAngle) * 140;
     } else if (!visible) {
-      targetX = player.lastVisibleX + Math.cos(patrolAngle + enemy.roleAngle) * 260;
-      targetY = player.lastVisibleY + Math.sin(patrolAngle + enemy.roleAngle) * 260;
+      const memory = enemy.profile?.memory || 1;
+      targetX = player.lastVisibleX + Math.cos(patrolAngle + enemy.roleAngle) * 260 * memory;
+      targetY = player.lastVisibleY + Math.sin(patrolAngle + enemy.roleAngle) * 260 * memory;
     }
 
     targetX = clamp(targetX, enemy.radius, world.width - enemy.radius);
@@ -590,7 +767,7 @@ function updateEnemies(dt) {
       }
     }
 
-    const chaseSpeed = visible ? enemy.speed : enemy.speed - 45;
+    const chaseSpeed = visible ? enemy.speed + alertLevel * 13 : enemy.speed - 45 + alertLevel * 5;
     const speed = safe ? enemy.speed * 0.32 : chaseSpeed;
     const step = speed * dt;
     const dx = target.x - enemy.x;
@@ -624,6 +801,8 @@ function updateEnemies(dt) {
     }
 
     const moved = Math.hypot(enemy.x - beforeX, enemy.y - beforeY);
+    if (moved > 1) enemy.facing = Math.atan2(enemy.y - beforeY, enemy.x - beforeX);
+
     const stillTrying = Math.hypot(enemy.x - targetX, enemy.y - targetY) > 120;
     enemy.stuckTime = moved < 6 && stillTrying ? enemy.stuckTime + dt : Math.max(0, enemy.stuckTime - dt * 2);
     if (enemy.stuckTime > 0.45) {
@@ -632,7 +811,7 @@ function updateEnemies(dt) {
     }
 
     const playerDistance = Math.hypot(player.x - enemy.x, player.y - enemy.y);
-    if (visible && playerDistance < 430) spotted = true;
+    if (canEnemySeePlayer(enemy, visible, playerDistance)) spotted = true;
 
     if (visible && player.invincible <= 0 && playerDistance < player.radius + enemy.radius) {
       player.lives -= 1;
@@ -640,6 +819,7 @@ function updateEnemies(dt) {
         player.lives = 0;
         player.lost = true;
         loseScreen.hidden = false;
+        loseScreen.querySelector("p").textContent = `Time ${formatTime(player.time)} / Score ${player.score} / Tasks ${player.tasksCompleted}`;
         stopBgm();
         return;
       }
@@ -648,39 +828,48 @@ function updateEnemies(dt) {
     }
   }
 
-  if (spotted && player.spottedCooldown <= 0) {
-    startAlertMusic();
-    player.spottedCooldown = 2.4;
+  player.spotted = spotted;
+  if (spotted) {
+    stopBgm();
+    if (player.spottedCooldown <= 0) {
+      startAlertMusic();
+      player.spottedCooldown = 2.4;
+    }
+  } else if (!alertActive) {
+    startBgm();
   }
 }
 
 function update(dt) {
   if (player.won || player.lost) return;
+  player.time += dt;
   player.invincible = Math.max(0, player.invincible - dt);
   player.speedBoost = Math.max(0, player.speedBoost - dt);
   player.invisible = Math.max(0, player.invisible - dt);
+  player.revealMap = Math.max(0, player.revealMap - dt);
   player.deathEffect = Math.max(0, player.deathEffect - dt);
   player.spottedCooldown = Math.max(0, player.spottedCooldown - dt);
   updatePlayer(dt);
   updateEnemies(dt);
 
-  const zone = zones.find((item) => (
-    player.x >= item.x && player.x < item.x + item.w && player.y >= item.y && player.y < item.y + item.h
-  ));
+  const zone = currentZone();
   const remaining = tasks.filter((task) => !task.taken).length;
   if (remaining === 0) {
     player.won = true;
     winScreen.hidden = false;
+    winScreen.querySelector("p").textContent = `Time ${formatTime(player.time)} / Catches ${player.catches} / Items ${player.itemsUsed}`;
     stopBgm();
   }
   scoreEl.textContent = `${player.score} pts`;
   const effects = [
     player.speedBoost > 0 ? `Speed ${Math.ceil(player.speedBoost)}s` : "",
     player.invisible > 0 ? `透明 ${Math.ceil(player.invisible)}s` : "",
+    player.revealMap > 0 ? `Map ${Math.ceil(player.revealMap)}s` : "",
+    player.hiding ? "Hide" : "",
   ].filter(Boolean);
   statusEl.textContent = effects.join(" / ") || (inStartSafeZone(player.x, player.y) ? "Start Safe" : zone?.name || "Map");
   areaBanner.textContent = zone?.name || "Map";
-  lifeEl.textContent = `残機 ${player.lives} / Task ${remaining}`;
+  lifeEl.textContent = `残機 ${player.lives} / Task ${remaining} / Lv ${currentAlertLevel()} / ST ${Math.round(player.stamina)}`;
 }
 
 function drawWorld(camera) {
@@ -736,14 +925,16 @@ function drawWorld(camera) {
     ctx.fillRect(block.x + 10 - camera.x, block.y + 12 - camera.y, block.w - 20, 8);
   }
 
+  for (const spot of hideSpots) drawHideSpot(spot.x - camera.x, spot.y - camera.y, spot === nearbyHideSpot());
   for (const task of tasks) {
-    if (!task.taken) drawTask(task.x - camera.x, task.y - camera.y);
+    if (!task.taken) drawTask(task.x - camera.x, task.y - camera.y, task);
   }
 
   for (const powerUp of powerUps) {
     if (!powerUp.taken) drawPowerUp(powerUp.x - camera.x, powerUp.y - camera.y, powerUp.type);
   }
 
+  for (const enemy of enemies) drawEnemyVision(enemy, camera);
   for (const enemy of enemies) drawEnemy(enemy.x - camera.x, enemy.y - camera.y, enemy.color);
   drawPlayer(playerScreenX, playerScreenY);
 
@@ -768,14 +959,26 @@ function drawWorld(camera) {
   }
 
   if (player.deathEffect > 0) drawDeathEffect(playerScreenX, playerScreenY);
+  if (player.spotted) drawSpottedOverlay();
+  drawPlayerMeters();
 }
 
-function drawTask(x, y) {
-  ctx.fillStyle = "rgba(255,216,79,0.2)";
+function drawTask(x, y, task) {
+  const color = task.type === "repair" ? "#ffb14f" : task.type === "risk" ? "#ff4f7a" : "#ffd84f";
+  ctx.fillStyle = task.type === "risk" ? "rgba(255,79,122,0.22)" : "rgba(255,216,79,0.2)";
   ctx.beginPath();
   ctx.arc(x, y, 30, 0, Math.PI * 2);
   ctx.fill();
-  drawStar(x, y, 18, "#ffd84f");
+  if (task.type === "repair") drawWrench(x, y, color);
+  else drawStar(x, y, 18, color);
+  if (player.activeTask === task) {
+    const displayDuration = task.duration + (currentZone()?.name === "Factory" ? 0.55 : 0);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(x, y, 38, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, player.taskProgress / displayDuration));
+    ctx.stroke();
+  }
 }
 
 function drawDeathEffect(cx, cy) {
@@ -797,13 +1000,21 @@ function drawDeathEffect(cx, cy) {
 
 function drawPowerUp(x, y, type) {
   const isSpeed = type === "speed";
+  const colors = {
+    speed: "#51ee8d",
+    invisible: "#78ebff",
+    warp: "#b991ff",
+    reveal: "#ff8ee2",
+    life: "#ff6f8f",
+  };
+  const color = colors[type] || "#ffffff";
   ctx.save();
   ctx.translate(x, y);
-  ctx.fillStyle = isSpeed ? "rgba(81,238,141,0.2)" : "rgba(120,235,255,0.2)";
+  ctx.fillStyle = `${color}33`;
   ctx.beginPath();
   ctx.arc(0, 0, 28, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = isSpeed ? "#51ee8d" : "#78ebff";
+  ctx.fillStyle = color;
   ctx.strokeStyle = "#101214";
   ctx.lineWidth = 3;
   if (isSpeed) {
@@ -817,7 +1028,7 @@ function drawPowerUp(x, y, type) {
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-  } else {
+  } else if (type === "invisible") {
     ctx.globalAlpha = 0.88;
     ctx.beginPath();
     ctx.ellipse(0, 0, 16, 21, 0, 0, Math.PI * 2);
@@ -828,7 +1039,105 @@ function drawPowerUp(x, y, type) {
     ctx.arc(-6, -3, 3, 0, Math.PI * 2);
     ctx.arc(6, -3, 3, 0, Math.PI * 2);
     ctx.fill();
+  } else if (type === "warp") {
+    ctx.beginPath();
+    ctx.arc(0, 0, 15, 0, Math.PI * 1.6);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(12, -16);
+    ctx.lineTo(20, -7);
+    ctx.lineTo(8, -5);
+    ctx.fill();
+  } else if (type === "reveal") {
+    ctx.beginPath();
+    ctx.arc(0, 0, 17, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, 6, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(0, -18);
+    ctx.bezierCurveTo(22, -8, 14, 18, 0, 20);
+    ctx.bezierCurveTo(-14, 18, -22, -8, 0, -18);
+    ctx.fill();
+    ctx.stroke();
   }
+  ctx.restore();
+}
+
+function drawHideSpot(x, y, active) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = active ? "rgba(126, 235, 255, 0.34)" : "rgba(45, 92, 60, 0.56)";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 34, 22, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = active ? "#baf7ff" : "rgba(12, 30, 18, 0.8)";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPlayerMeters() {
+  const x = 22;
+  const y = window.innerHeight - 70;
+  ctx.save();
+  ctx.fillStyle = "rgba(8, 12, 14, 0.72)";
+  ctx.fillRect(x - 10, y - 16, 330, 58);
+  ctx.fillStyle = "#d8dde2";
+  ctx.font = "800 12px Arial";
+  ctx.fillText(`STAMINA ${Math.round(player.stamina)}`, x, y - 2);
+  ctx.fillStyle = "rgba(255,255,255,0.14)";
+  ctx.fillRect(x, y + 8, 180, 12);
+  ctx.fillStyle = player.stamina < 24 ? "#ff5c65" : "#51ee8d";
+  ctx.fillRect(x, y + 8, 180 * (player.stamina / maxStamina), 12);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(`R Warp ${player.warps}   E Hide`, x + 195, y + 19);
+  if (player.activeTask) ctx.fillText("Hold position to finish repair", x, y + 38);
+  ctx.restore();
+}
+
+function drawWrench(x, y, color) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-0.7);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 7;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-14, 12);
+  ctx.lineTo(12, -14);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawEnemyVision(enemy, camera) {
+  if (enemy.stunned > 0) return;
+  const x = enemy.x - camera.x;
+  const y = enemy.y - camera.y;
+  const facing = enemy.facing || 0;
+  const range = enemy.profile?.vision || enemyVisionRange;
+  const angle = enemy.profile?.angle || enemyVisionAngle;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(facing);
+  ctx.fillStyle = player.spotted ? "rgba(255, 62, 72, 0.16)" : "rgba(255, 216, 79, 0.08)";
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.arc(0, 0, range, -angle / 2, angle / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawSpottedOverlay() {
+  ctx.save();
+  ctx.fillStyle = "rgba(190, 18, 32, 0.16)";
+  ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+  ctx.strokeStyle = "rgba(255, 43, 58, 0.55)";
+  ctx.lineWidth = 12;
+  ctx.strokeRect(6, 6, window.innerWidth - 12, window.innerHeight - 12);
   ctx.restore();
 }
 
@@ -938,22 +1247,37 @@ function drawMiniMap() {
 
   mapCtx.fillStyle = "#ffd84f";
   for (const task of tasks) {
-    if (!task.taken) mapCtx.fillRect(task.x * sx - 3, task.y * sy - 3, 6, 6);
+    if (task.taken) continue;
+    mapCtx.fillStyle = task.type === "repair" ? "#ffb14f" : task.type === "risk" ? "#ff4f7a" : "#ffd84f";
+    mapCtx.fillRect(task.x * sx - 3, task.y * sy - 3, 6, 6);
   }
 
   for (const powerUp of powerUps) {
     if (powerUp.taken) continue;
-    mapCtx.fillStyle = powerUp.type === "speed" ? "#51ee8d" : "#78ebff";
+    const colors = {
+      speed: "#51ee8d",
+      invisible: "#78ebff",
+      warp: "#b991ff",
+      reveal: "#ff8ee2",
+      life: "#ff6f8f",
+    };
+    mapCtx.fillStyle = colors[powerUp.type] || "#ffffff";
     mapCtx.beginPath();
-    mapCtx.arc(powerUp.x * sx, powerUp.y * sy, 3.5, 0, Math.PI * 2);
+    mapCtx.arc(powerUp.x * sx, powerUp.y * sy, 4, 0, Math.PI * 2);
     mapCtx.fill();
+    mapCtx.strokeStyle = "#101214";
+    mapCtx.lineWidth = 1;
+    mapCtx.stroke();
   }
 
   mapCtx.fillStyle = "#ff4f58";
   for (const enemy of enemies) {
     mapCtx.beginPath();
-    mapCtx.arc(enemy.x * sx, enemy.y * sy, 4, 0, Math.PI * 2);
+    mapCtx.arc(enemy.x * sx, enemy.y * sy, 4.5, 0, Math.PI * 2);
     mapCtx.fill();
+    mapCtx.strokeStyle = "#101214";
+    mapCtx.lineWidth = 1;
+    mapCtx.stroke();
   }
 
   mapCtx.fillStyle = "#ffffff";
@@ -961,8 +1285,8 @@ function drawMiniMap() {
   mapCtx.arc(player.x * sx, player.y * sy, 5, 0, Math.PI * 2);
   mapCtx.fill();
 
-  mapCtx.fillStyle = "rgba(0,0,0,0.62)";
-  mapCtx.fillRect(8, 8, 82, 58);
+  mapCtx.fillStyle = "rgba(0,0,0,0.66)";
+  mapCtx.fillRect(8, 8, 112, 74);
   mapCtx.font = "700 10px Arial";
   mapCtx.fillStyle = "#ffffff";
   mapCtx.fillText("white: you", 15, 23);
@@ -970,8 +1294,8 @@ function drawMiniMap() {
   mapCtx.fillText("red: enemy", 15, 39);
   mapCtx.fillStyle = "#ffd84f";
   mapCtx.fillText("yellow: task", 15, 55);
-  mapCtx.fillStyle = "#51ee8d";
-  mapCtx.fillText("green: speed", 15, 71);
+  mapCtx.fillStyle = "#78ebff";
+  mapCtx.fillText("color: item", 15, 71);
 }
 
 let lastTime = performance.now();
