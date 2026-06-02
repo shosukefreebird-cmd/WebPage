@@ -71,7 +71,7 @@ body {
   place-items: center;
   padding: 24px;
   background: rgba(0, 0, 0, 0.34);
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .win-screen[hidden] {
@@ -102,6 +102,23 @@ body {
 .win-screen p {
   margin: 0;
   color: #d8d0c3;
+}
+
+.continue-button {
+  min-height: 42px;
+  margin-top: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  padding: 0 20px;
+  background: #f0c35a;
+  color: #151311;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.continue-button:hover {
+  background: #ffd976;
 }
 
 .lose-screen h2 {
