@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tag City Game - Play</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="game-shell">
+      <canvas id="game" width="1280" height="720" aria-label="鬼ごっこゲーム"></canvas>
+
+      <section class="hud" aria-label="ゲーム情報">
+        <div>
+          <span class="eyebrow">Tag City</span>
+          <strong class="game-title">TAG CITY</strong>
+          <span class="game-subtitle">敵から逃げてタスクを集める</span>
+        </div>
+        <div class="stats">
+          <span id="taskCount">Task 77</span>
+          <span id="area">Park</span>
+          <span id="cash">残機 5</span>
+        </div>
+      </section>
+
+      <div class="area-banner" id="areaBanner" aria-live="polite">Park</div>
+
+      <aside class="panel">
+        <h1>鬼ごっこゲーム</h1>
+        <p>WASD / 矢印キーで移動。Shiftでダッシュ、Eで隠れる。アイテムは移動速度アップと透明化だけです。</p>
+        <div class="keys" aria-label="操作方法">
+          <span>W</span><span>A</span><span>S</span><span>D</span>
+          <span>Shift</span><span>E</span>
+        </div>
+      </aside>
+
+      <section class="win-screen" id="winScreen" aria-live="polite" hidden>
+        <div>
+          <span>Mission Complete</span>
+          <h2>You Win</h2>
+          <p>すべてのタスクを集めました。</p>
+          <button class="continue-button" type="button" data-reset>Continue</button>
+        </div>
+      </section>
+
+      <section class="win-screen lose-screen" id="loseScreen" aria-live="polite" hidden>
+        <div>
+          <span>Game Over</span>
+          <h2>You Lose</h2>
+          <p>残機をすべて使い切りました。</p>
+          <button class="continue-button" type="button" data-reset>Continue</button>
+        </div>
+      </section>
+
+      <canvas id="miniMap" width="180" height="180" aria-label="ミニマップ"></canvas>
+    </main>
+
+    <script src="game.js?v=20260616-no-repair-enemy-speed-220"></script>
+  </body>
+</html>

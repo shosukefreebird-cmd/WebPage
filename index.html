@@ -1,59 +1,119 @@
 <!doctype html>
-<html lang="ja">
+<html class="home-root" lang="ja">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Tag City Game</title>
     <link rel="stylesheet" href="styles.css">
   </head>
-  <body>
-    <main class="game-shell">
-      <canvas id="game" width="1280" height="720" aria-label="鬼ごっこゲーム"></canvas>
+  <body class="home-page">
+    <main class="home-shell">
+      <section class="home-hero" aria-labelledby="homeTitle">
+        <div class="city-preview" aria-hidden="true">
+          <div class="map-grid">
+            <span class="road road-v one"></span>
+            <span class="road road-v two"></span>
+            <span class="road road-v three"></span>
+            <span class="road road-h one"></span>
+            <span class="road road-h two"></span>
+            <span class="road road-h three"></span>
+            <span class="building b1"></span>
+            <span class="building b2"></span>
+            <span class="building b3"></span>
+            <span class="building b4"></span>
+            <span class="task-dot t1"></span>
+            <span class="task-dot t2"></span>
+            <span class="task-dot t3"></span>
+            <span class="enemy-dot e1"></span>
+            <span class="enemy-dot e2"></span>
+            <span class="item-dot speed-item"></span>
+            <span class="item-dot invisible-item"></span>
+            <span class="route-line r1"></span>
+            <span class="route-line r2"></span>
+            <span class="player-dot"></span>
+          </div>
+        </div>
 
-      <section class="hud" aria-label="ゲーム情報">
-        <div>
+        <div class="home-content">
           <span class="eyebrow">Tag City</span>
-          <strong>敵から逃げてタスクを集める</strong>
+          <strong class="home-logo">TAG CITY</strong>
+          <div class="home-title-strip" aria-hidden="true">
+            <span>77 Tasks</span>
+            <span>10 Items</span>
+            <span>5 Difficulties</span>
+          </div>
+          <h1 id="homeTitle">鬼から逃げて、街中のタスクを集めろ。</h1>
+          <p>
+            視界に入らないルートを選び、ダッシュ・隠れる・2種類のアイテムを使い分ける
+            街中鬼ごっこゲームです。
+          </p>
+
+          <nav class="difficulty-panel" aria-label="難易度設定">
+            <strong class="difficulty-title">難易度を選択して開始</strong>
+            <div class="difficulty-options">
+              <a href="game.html?difficulty=easy"><strong>Easy</strong><small>鬼 6体</small></a>
+              <a href="game.html?difficulty=normal"><strong>Normal</strong><small>鬼 7体</small></a>
+              <a href="game.html?difficulty=hard"><strong>Hard</strong><small>鬼 8体</small></a>
+              <a href="game.html?difficulty=impossible"><strong>Impossible</strong><small>鬼 10体</small></a>
+              <a href="game.html?difficulty=insanity"><strong>Insanity</strong><small>鬼 11体</small></a>
+            </div>
+            <p class="difficulty-note">残機 5 / タスク回収 / アイテムは移動速度アップと透明化だけ</p>
+          </nav>
         </div>
-        <div class="stats">
-          <span id="speed">0 pts</span>
-          <span id="area">Park</span>
-          <span id="cash">残機 5</span>
-        </div>
+
+        <a class="scroll-cue" href="#rules">ルールを見る</a>
       </section>
 
-      <div class="area-banner" id="areaBanner" aria-live="polite">Park</div>
-
-      <aside class="panel">
-        <h1>鬼ごっこゲーム</h1>
-        <p>WASD / 矢印キーで移動。Shiftでダッシュ、Eで隠れる、Rで緊急ワープ。タスクとアイテムを使い分けて鬼をかわしてください。</p>
-        <div class="keys" aria-label="操作方法">
-          <span>W</span><span>A</span><span>S</span><span>D</span>
-          <span>Shift</span><span>E</span><span>R</span>
-        </div>
-      </aside>
-
-      <section class="win-screen" id="winScreen" aria-live="polite" hidden>
-        <div>
-          <span>Mission Complete</span>
-          <h2>You Win</h2>
-          <p>すべてのタスクを集めました。</p>
-          <button class="continue-button" type="button" data-reset>Continue</button>
-        </div>
+      <section class="home-info" aria-label="ゲーム紹介">
+        <article>
+          <strong>Mission</strong>
+          <p>黄色のタスクをすべて集めるとクリア。残りタスク数を見ながら街を回ってください。</p>
+        </article>
+        <article>
+          <strong>Stealth</strong>
+          <p>赤い鬼の視界を避けて移動。ParkとForestでは止まると隠れやすくなります。</p>
+        </article>
+        <article>
+          <strong>Controls</strong>
+          <p>WASD / 矢印キーで移動、Shiftでダッシュ、Eで隠れる。アイテムは移動速度アップと透明化だけです。</p>
+        </article>
       </section>
 
-      <section class="win-screen lose-screen" id="loseScreen" aria-live="polite" hidden>
-        <div>
-          <span>Game Over</span>
-          <h2>You Lose</h2>
-          <p>残機をすべて使い切りました。</p>
-          <button class="continue-button" type="button" data-reset>Continue</button>
+      <section class="rules-section" id="rules" aria-labelledby="rulesTitle">
+        <div class="rules-heading">
+          <span class="eyebrow">Rules</span>
+          <h2 id="rulesTitle">ゲームルール</h2>
+          <p>始める前に、勝ち方・負け方・逃げ方だけ確認しておけば大丈夫です。</p>
+        </div>
+
+        <div class="rules-list">
+          <article>
+            <span>01</span>
+            <h3>タスクを全部集める</h3>
+            <p>黄色のタスクをすべて回収するとクリアです。修理タスクは少しその場に止まる必要があります。</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>鬼に捕まらない</h3>
+            <p>赤い鬼に触れると残機が1つ減ります。残機が0になるとゲームオーバーです。</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>視界を避ける</h3>
+            <p>鬼の前方には視界があります。視界に入ると追われやすくなるので、建物や道を使って逃げてください。</p>
+          </article>
+          <article>
+            <span>04</span>
+            <h3>スタミナを管理する</h3>
+            <p>Shiftでダッシュできますが、スタミナを消費します。走り続けず、必要な場面で使うのがコツです。</p>
+          </article>
+          <article>
+            <span>05</span>
+            <h3>アイテムは2種類だけ</h3>
+            <p>緑のアイテムは移動速度アップ、水色のアイテムは透明化です。それ以外のアイテムは出ません。</p>
+          </article>
         </div>
       </section>
-
-      <canvas id="miniMap" width="180" height="180" aria-label="ミニマップ"></canvas>
     </main>
-
-    <script src="game.js"></script>
   </body>
 </html>
