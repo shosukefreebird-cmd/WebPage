@@ -663,11 +663,10 @@ function updatePlayer(dt) {
     return;
   }
 
-  const boost = keys.has("shift") && player.stamina > 4 && moving;
   const terrainSlow = zoneName === "Docks" || zoneName === "Harbor" ? 0.92 : 1;
   const baseSpeed = (player.speedBoost > 0 ? 285 : normalPlayerSpeed) * terrainSlow;
-  const moveSpeed = boost ? baseSpeed * 1.5 : baseSpeed;
-  player.stamina = clamp(player.stamina + (boost ? -34 : 24) * dt, 0, maxStamina);
+  const moveSpeed = baseSpeed;
+  player.stamina = clamp(player.stamina + 24 * dt, 0, maxStamina);
 
   let dx = 0;
   let dy = 0;
@@ -857,7 +856,7 @@ function update(dt) {
   ].filter(Boolean);
   statusEl.textContent = effects.join(" / ") || (inStartSafeZone(player.x, player.y) ? "Start Safe" : zone?.name || "Map");
   areaBanner.textContent = zone?.name || "Map";
-  lifeEl.textContent = `残機 ${player.lives} / ${difficulty.label} ${enemies.length}鬼 / Lv ${currentAlertLevel()} / ST ${Math.round(player.stamina)}`;
+  lifeEl.textContent = `残機 ${player.lives} / ${difficulty.label} ${enemies.length}鬼 / Lv ${currentAlertLevel()}`;
 }
 
 function drawWorld(camera) {
@@ -1025,16 +1024,10 @@ function drawPlayerMeters() {
   const y = window.innerHeight - 70;
   ctx.save();
   ctx.fillStyle = "rgba(8, 12, 14, 0.72)";
-  ctx.fillRect(x - 10, y - 16, 330, 58);
+  ctx.fillRect(x - 10, y - 16, 180, 42);
   ctx.fillStyle = "#d8dde2";
   ctx.font = "800 12px Arial";
-  ctx.fillText(`STAMINA ${Math.round(player.stamina)}`, x, y - 2);
-  ctx.fillStyle = "rgba(255,255,255,0.14)";
-  ctx.fillRect(x, y + 8, 180, 12);
-  ctx.fillStyle = player.stamina < 24 ? "#ff5c65" : "#51ee8d";
-  ctx.fillRect(x, y + 8, 180 * (player.stamina / maxStamina), 12);
-  ctx.fillStyle = "#ffffff";
-  ctx.fillText("E Hide", x + 195, y + 19);
+  ctx.fillText("E Hide", x, y + 8);
   ctx.restore();
 }
 
