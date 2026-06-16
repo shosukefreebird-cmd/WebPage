@@ -9,6 +9,8 @@ const lifeEl = document.querySelector("#cash");
 const areaBanner = document.querySelector("#areaBanner");
 const winScreen = document.querySelector("#winScreen");
 const loseScreen = document.querySelector("#loseScreen");
+const pauseScreen = document.querySelector("#pauseScreen");
+const resumeButton = document.querySelector("#resumeButton");
 const startScreen = document.querySelector("#startScreen");
 const startButton = document.querySelector("#startButton");
 const resetButtons = document.querySelectorAll("[data-reset]");
@@ -64,6 +66,7 @@ let alertActive = false;
 let bgmTimer = null;
 let bgmStep = 0;
 let gameStarted = !startScreen;
+let paused = false;
 
 const zones = [
   { name: "Park", detail: "木が多い広場", x: 0, y: 0, w: 1800, h: 1334, color: "#45664d" },
@@ -168,15 +171,21 @@ function resize() {
 window.addEventListener("resize", resize);
 window.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
+  if (key === "escape" && gameStarted && !player.won && !player.lost) {
+    event.preventDefault();
+    setPaused(!paused);
+    return;
+  }
   if (startScreen && !gameStarted && key === "enter") {
     startGame();
     return;
   }
   keys.add(key);
-  if (gameStarted) ensureAudio();
+  if (gameStarted && !paused) ensureAudio();
 });
 window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
 if (startButton) startButton.addEventListener("click", startGame);
+if (resumeButton) resumeButton.addEventListener("click", () => setPaused(false));
 resetButtons.forEach((button) => button.addEventListener("click", resetGame));
 resize();
 
@@ -558,9 +567,22 @@ function playTaskSound() {
 function startGame() {
   if (gameStarted) return;
   gameStarted = true;
+  paused = false;
   if (startScreen) startScreen.hidden = true;
+  if (pauseScreen) pauseScreen.hidden = true;
   resetGame();
   ensureAudio();
+}
+
+function setPaused(value) {
+  paused = value;
+  if (pauseScreen) pauseScreen.hidden = !paused;
+  if (paused) {
+    stopBgm();
+    keys.clear();
+  } else {
+    ensureAudio();
+  }
 }
 
 function resetGame() {
@@ -584,6 +606,7 @@ function resetGame() {
   player.lastVisibleY = playerStart.y;
   player.won = false;
   player.lost = false;
+  paused = false;
 
   tasks.forEach((task) => {
     task.taken = false;
@@ -602,6 +625,7 @@ function resetGame() {
 
   winScreen.hidden = true;
   loseScreen.hidden = true;
+  if (pauseScreen) pauseScreen.hidden = true;
   winScreen.querySelector("p").textContent = "すべてのタスクを集めました。";
   loseScreen.querySelector("p").textContent = "残機をすべて使い切りました。";
   if (gameStarted) startBgm();
@@ -807,7 +831,7 @@ function updateEnemies(dt) {
 }
 
 function update(dt) {
-  if (player.won || player.lost) return;
+  if (paused || player.won || player.lost) return;
   player.time += dt;
   player.invincible = Math.max(0, player.invincible - dt);
   player.speedBoost = Math.max(0, player.speedBoost - dt);
@@ -1198,7 +1222,7 @@ let lastTime = performance.now();
 function loop(time) {
   const dt = Math.min((time - lastTime) / 1000, 0.033);
   lastTime = time;
-  if (gameStarted) update(dt);
+  if (gameStarted && !paused) update(dt);
 
   const camera = {
     x: clamp(player.x - window.innerWidth / 2, 0, Math.max(0, world.width - window.innerWidth)),

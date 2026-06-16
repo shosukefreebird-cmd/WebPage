@@ -39,7 +39,10 @@
           <span>Mission Complete</span>
           <h2>You Win</h2>
           <p>すべてのタスクを集めました。</p>
-          <button class="continue-button" type="button" data-reset>Continue</button>
+          <div class="end-actions">
+            <button class="continue-button" type="button" data-reset>Continue</button>
+            <a class="home-link-button" href="index.html">Home</a>
+          </div>
         </div>
       </section>
 
@@ -48,13 +51,28 @@
           <span>Game Over</span>
           <h2>You Lose</h2>
           <p>残機をすべて使い切りました。</p>
-          <button class="continue-button" type="button" data-reset>Continue</button>
+          <div class="end-actions">
+            <button class="continue-button" type="button" data-reset>Continue</button>
+            <a class="home-link-button" href="index.html">Home</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="win-screen pause-screen" id="pauseScreen" aria-live="polite" hidden>
+        <div>
+          <span>Paused</span>
+          <h2>Pause</h2>
+          <p>Escapeキーで再開できます。</p>
+          <div class="end-actions">
+            <button class="continue-button" id="resumeButton" type="button">Resume</button>
+            <a class="home-link-button" href="index.html">Home</a>
+          </div>
         </div>
       </section>
 
       <canvas id="miniMap" width="180" height="180" aria-label="ミニマップ"></canvas>
     </main>
 
-    <script src="game.js?v=20260616-no-repair-enemy-speed-220"></script>
+    <script src="game.js?v=20260616-pause-home-actions"></script>
   </body>
 </html>

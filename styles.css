@@ -685,7 +685,6 @@ body {
 
 .continue-button {
   min-height: 42px;
-  margin-top: 22px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 6px;
   padding: 0 20px;
@@ -696,8 +695,37 @@ body {
   cursor: pointer;
 }
 
-.continue-button:hover {
+.home-link-button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  padding: 0 20px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 900;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.end-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.continue-button:hover,
+.home-link-button:hover {
   background: #ffd976;
+  color: #151311;
+}
+
+.pause-screen h2 {
+  color: #f0c35a;
 }
 
 .lose-screen h2 {
